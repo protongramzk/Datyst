@@ -1,4 +1,4 @@
-// Charset final LS
+
 const LS_CHARSET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 #@<>{}[]+-*/";
 const LS_TO_INDEX = new Int8Array(128).fill(-1);
 for (let i = 0; i < LS_CHARSET.length; i++) {
@@ -8,14 +8,8 @@ for (let i = 0; i < LS_CHARSET.length; i++) {
 class LiteString {
   constructor(u8, jsString) {
     const len = jsString.length;
-
-    // Allocate: 2 byte length + len bytes data
     const ptr = u8.n(2 + len);
-
-    // write length
     u8.u16(ptr, len);
-
-    // write data
     for (let i = 0; i < len; i++) {
       const c = jsString.charCodeAt(i);
       const idx = LS_TO_INDEX[c];
@@ -27,8 +21,6 @@ class LiteString {
     this.ptr = ptr;
     this.length = len;
   }
-
-  // create LiteString dari pointer yang sudah ada
   static fromPtr(u8, ptr) {
     const len = u8.b[ptr] | (u8.b[ptr + 1] << 8);
     const ls = Object.create(LiteString.prototype);
@@ -38,12 +30,10 @@ class LiteString {
     return ls;
   }
 
-  // baca karakter i
+
   charAt(i) {
     return LS_CHARSET[this.u8.b[this.ptr + 2 + i]];
   }
-
-  // convert ke JS string
   toString() {
     const len = this.length;
     let out = "";
@@ -54,8 +44,6 @@ class LiteString {
     }
     return out;
   }
-
-  // bandingkan dengan LiteString lain
   equals(other) {
     if (this.length !== other.length) return false;
     const b1 = this.u8.b;
@@ -68,7 +56,7 @@ class LiteString {
     return true;
   }
 
-  // hash FNV-1a 32-bit
+
   hash() {
     let h = 2166136261;
     const b = this.u8.b;
@@ -84,16 +72,14 @@ class LiteString {
 class ui8 {
   constructor(size = 1024) {
     this.b = new Uint8Array(size);
-    this.t = 0; // top pointer
+    this.t = 0; 
   }
-
-  // allocate n bytes, return ptr
   n(n) {
     let t = this.t;
     let nt = t + n;
 
     if (nt > this.b.length) {
-      // grow: next power of two
+
       let nl = this.b.length << 1;
       while (nl < nt) nl <<= 1;
 
@@ -106,7 +92,7 @@ class ui8 {
     return t;
   }
 
-  // raw writes (INLINE HOT PATH)
+
   u8(p, v) {
     this.b[p] = v;
   }
@@ -125,7 +111,7 @@ class ui8 {
     b[p + 3] = v >>> 24;
   }
 
-  // bulk copy
+
   copy(p, src, len) {
     this.b.set(src.subarray(0, len), p);
   }
@@ -133,28 +119,28 @@ class ui8 {
 
 class SmallFloat {
   constructor(value = 0) {
-    this.val = value; // simpan JS Number
+    this.val = value; 
   }
 
-  // set value
+
   set(value) {
     this.val = value;
   }
 
-  // get value
+
   get() {
     return this.val;
   }
 
-  // encode ke 2 byte Q8.8
+
   toBytes() {
-    let v = Math.round(this.val * 256); // Q8.8
+    let v = Math.round(this.val * 256); 
     if (v < -32768) v = -32768;
     if (v > 32767) v = 32767;
     return Uint8Array.from([v & 0xFF, (v >> 8) & 0xFF]);
   }
 
-  // decode dari 2 byte Q8.8
+
   static fromBytes(bytes) {
     let v = bytes[0] | (bytes[1] << 8);
     if (v & 0x8000) v -= 0x10000;
@@ -164,10 +150,10 @@ class SmallFloat {
 
 class ConfObject {
   constructor(data = {}) {
-    this.entries = []; // array [key, value]
-    this.index = new Map(); // quick lookup key string -> value
+    this.entries = []; 
+    this.index = new Map(); 
     this.dataMap = data;
-    
+
     for (const k in data) {
       const v = data[k];
       this.set(k, v);
@@ -183,11 +169,11 @@ class ConfObject {
     return this.index[key];
   }
 
-  // relasional: resolve if value is id of another ConfObject
+
   resolve(key, objectsMap) {
     let val = this.get(key);
     if (typeof val === "string" && objectsMap && objectsMap[val]) {
-      return objectsMap[val]; // return linked ConfObject
+      return objectsMap[val]; 
     }
     return val;
   }
@@ -196,10 +182,10 @@ class ConfObject {
 class SuperUI8 {
   constructor(size = 1024) {
     this.buffer = new Uint8Array(size);
-    this.length = 0; // jumlah byte terpakai
+    this.length = 0; 
   }
 
-  // pastikan buffer cukup panjang
+
   _ensure(add) {
     const need = this.length + add;
     if (need > this.buffer.length) {
@@ -211,7 +197,7 @@ class SuperUI8 {
     }
   }
 
-  // encode number > 255 ke base-256 dan push ke buffer
+
   push(num) {
     if (num < 0) throw new Error("Only non-negative numbers supported");
     const bytes = [];
@@ -224,10 +210,10 @@ class SuperUI8 {
     for (let i = 0; i < bytes.length; i++) {
       this.buffer[this.length++] = bytes[i];
     }
-    return this.length - bytes.length; // return start index
+    return this.length - bytes.length; 
   }
 
-  // decode number dari posisi tertentu, kembalikan {value, nextIndex}
+
   get(index) {
     let num = 0;
     let shift = 0;
@@ -236,12 +222,12 @@ class SuperUI8 {
       const byte = this.buffer[i++];
       num += byte << shift;
       shift += 8;
-      if (byte < 255) break; // byte < 255 menandakan akhir angka
+      if (byte < 255) break; 
     }
     return { value: num, nextIndex: i };
   }
 
-  // langsung set number di posisi tertentu (overwrite, optional)
+
   set(index, num) {
     const bytes = [];
     do {
@@ -254,12 +240,12 @@ class SuperUI8 {
     }
   }
 
-  // optional: serialize buffer sampai length
+
   toBytes() {
     return this.buffer.slice(0, this.length);
   }
 
-  // reset buffer
+
   clear() {
     this.length = 0;
   }
@@ -267,10 +253,10 @@ class SuperUI8 {
 
 class Flags {
   constructor(initialSize = 1) {
-    this.buffer = new Uint8Array(initialSize); // 1 byte = 8 flags
+    this.buffer = new Uint8Array(initialSize); 
   }
 
-  // pastikan buffer cukup besar
+
   _ensure(index) {
     const neededBytes = Math.floor(index / 8) + 1;
     if (neededBytes > this.buffer.length) {
@@ -314,22 +300,22 @@ class Flags {
     this.buffer.fill(0);
   }
 
-  // serialize ke bytes
+
   toBytes() {
     return this.buffer.slice();
   }
 
-  // load dari bytes
+
   fromBytes(bytes) {
     this.buffer = new Uint8Array(bytes);
   }
 
-  // Array-like access
+
   get length() {
     return this.buffer.length * 8;
   }
 
-  // support flags[i] = true / false
+
   getFlag(index) {
     return this.check(index);
   }
@@ -341,11 +327,11 @@ class Flags {
 }
 class SConfObject {
   constructor() {
-    this.keys = [];   // LiteString[]
-    this.values = []; // SmallFloat | ui8/SuperUI8 | LiteString | Flags
+    this.keys = [];   
+    this.values = []; 
   }
 
-  // set key/value
+
   set(key, value) {
     if (!(key instanceof LiteString)) throw new Error("Key must be LiteString");
 
@@ -358,25 +344,25 @@ class SConfObject {
     }
   }
 
-  // get value
+
   get(key) {
     const idx = this.keys.findIndex(k => k.toString() === key.toString());
     return idx >= 0 ? this.values[idx] : null;
   }
 
-  // check existence
+
   has(key) {
     return this.keys.some(k => k.toString() === key.toString());
   }
 
-  // iterate
+
   forEach(callback) {
     for (let i = 0; i < this.keys.length; i++) {
       callback(this.keys[i], this.values[i]);
     }
   }
 
-  // serialize
+
   toBytes() {
     const chunks = [];
     for (let i = 0; i < this.keys.length; i++) {
@@ -387,23 +373,23 @@ class SConfObject {
       const val = this.values[i];
 
       if (val instanceof SmallFloat) {
-        chunks.push(0); // type 0 = SmallFloat
+        chunks.push(0); 
         const valBytes = val.toBytes();
-        chunks.push(...valBytes); // fixed 2 bytes
+        chunks.push(...valBytes); 
       } else if (val instanceof ui8 || val instanceof SuperUI8) {
-        chunks.push(1); // type 1 = ui8/SuperUI8
+        chunks.push(1); 
         const valBytes = val.toBytes();
-        chunks.push(valBytes.length & 0xFF, (valBytes.length >> 8) & 0xFF); // 2 bytes length
+        chunks.push(valBytes.length & 0xFF, (valBytes.length >> 8) & 0xFF); 
         chunks.push(...valBytes);
       } else if (val instanceof LiteString) {
-        chunks.push(2); // type 2 = LiteString
+        chunks.push(2); 
         const valBytes = val.toBytes();
         chunks.push(valBytes.length & 0xFF, (valBytes.length >> 8) & 0xFF);
         chunks.push(...valBytes);
       } else if (val instanceof Flags) {
-        chunks.push(3); // type 3 = Flags
+        chunks.push(3); 
         const valBytes = val.toBytes();
-        chunks.push(valBytes.length); // 1 byte length
+        chunks.push(valBytes.length); 
         chunks.push(...valBytes);
       } else {
         throw new Error("Unsupported value type");
@@ -412,7 +398,7 @@ class SConfObject {
     return new Uint8Array(chunks);
   }
 
-  // deserialize
+
   static fromBytes(bytes) {
     const obj = new SConfObject();
     let i = 0;
@@ -424,26 +410,26 @@ class SConfObject {
 
       const typeFlag = bytes[i++];
 
-      if (typeFlag === 0) { // SmallFloat
+      if (typeFlag === 0) { 
         const valBytes = bytes.slice(i, i + 2);
         const value = SmallFloat.fromBytes(valBytes);
         i += 2;
         obj.set(key, value);
-      } else if (typeFlag === 1) { // ui8/SuperUI8
+      } else if (typeFlag === 1) { 
         const len = bytes[i] | (bytes[i + 1] << 8);
         i += 2;
         const valBytes = bytes.slice(i, i + len);
         const value = SuperUI8.fromBytes(valBytes);
         i += len;
         obj.set(key, value);
-      } else if (typeFlag === 2) { // LiteString
+      } else if (typeFlag === 2) { 
         const len = bytes[i] | (bytes[i + 1] << 8);
         i += 2;
         const valBytes = bytes.slice(i, i + len);
         const value = LiteString.fromBytes(valBytes);
         i += len;
         obj.set(key, value);
-      } else if (typeFlag === 3) { // Flags
+      } else if (typeFlag === 3) { 
         const len = bytes[i++];
         const valBytes = bytes.slice(i, i + len);
         const value = new Flags();
